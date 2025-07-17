@@ -170,6 +170,33 @@ module ariane_xilinx (
   input  logic [ 7:0]  sw          ,
   output logic         fan_pwm     ,
   input  logic         trst_n      ,
+`elsif BERGEN
+  input  logic         sys_clk_p   ,
+  input  logic         sys_clk_n   ,
+  input  logic         cpu_resetn  ,
+  inout  wire  [ 7:0]  ddr3_dq     ,
+  inout  wire  [ 0:0]  ddr3_dqs_n  ,
+  inout  wire  [ 0:0]  ddr3_dqs_p  ,
+  output logic [15:0]  ddr3_addr   ,
+  output logic [ 2:0]  ddr3_ba     ,
+  output logic         ddr3_ras_n  ,
+  output logic         ddr3_cas_n  ,
+  output logic         ddr3_we_n   ,
+  output logic         ddr3_reset_n,
+  output logic [ 0:0]  ddr3_ck_p   ,
+  output logic [ 0:0]  ddr3_ck_n   ,
+  output logic [ 0:0]  ddr3_cke    ,
+  output logic [ 0:0]  ddr3_cs_n   ,
+  output logic [ 0:0]  ddr3_dm     ,
+  output logic [ 0:0]  ddr3_odt    ,
+
+  output logic [ 7:0]  led         ,
+  input  logic [ 7:0]  sw          ,
+  input  logic         trst_n      ,
+  output logic         trigger     ,
+  output logic         clk_husky   ,
+  output wire          vddr_enable ,
+  output wire          LVDS_XO_200M_ENA,
 `endif
   // SPI
   output logic        spi_mosi    ,
@@ -177,7 +204,6 @@ module ariane_xilinx (
   output logic        spi_ss      ,
   output logic        spi_clk_o   ,
   // common part
-  // input logic      trst_n      ,
   input  logic        tck         ,
   input  logic        tms         ,
   input  logic        tdi         ,
@@ -281,6 +307,9 @@ assign trst_n = ~trst;
 `elsif NEXYS_VIDEO
 logic cpu_reset;
 assign cpu_reset  = ~cpu_resetn;
+`elsif BERGEN
+logic cpu_reset;
+assign cpu_reset = ~cpu_resetn;
 `endif
 
 logic pll_locked;
@@ -881,6 +910,9 @@ ariane_peripherals #(
     `elsif NEXYS_VIDEO
     .InclSPI      ( 1'b1         ),
     .InclEthernet ( 1'b0         )
+    `elsif BERGEN
+    .InclSPI      ( 1'b1         ),
+    .InclEthernet ( 1'b0         )
     `endif
 ) i_ariane_peripherals (
     .clk_i        ( clk                          ),
@@ -896,6 +928,7 @@ ariane_peripherals #(
     .irq_o        ( irq                          ),
     .rx_i         ( rx                           ),
     .tx_o         ( tx                           ),
+    `ifndef BERGEN
     .eth_txck,
     .eth_rxck,
     .eth_rxctl,
@@ -905,6 +938,9 @@ ariane_peripherals #(
     .eth_txd,
     .eth_mdio,
     .eth_mdc,
+    `else
+    .trigger        ( trigger                     ),
+    `endif
     .phy_tx_clk_i   ( phy_tx_clk                  ),
     .sd_clk_i       ( sd_clk_sys                  ),
     .spi_clk_o      ( spi_clk_o                   ),
@@ -920,6 +956,11 @@ ariane_peripherals #(
     `endif
 );
 
+`ifdef BERGEN
+assign vddr_enable = 1'b1;         // Always enable DDR power for Bergen
+assign LVDS_XO_200M_ENA = 1'b1;    // Always enable 200MHz oscillator for Bergen
+assign clk_husky = clk;            // 50 MHz
+`endif
 
 // ---------------------
 // Board peripherals
@@ -1143,9 +1184,18 @@ xlnx_clk_gen i_xlnx_clk_gen (
   .locked   ( pll_locked      ),
   .clk_in1  ( ddr_clock_out   )  // 100MHz input clock
 );
-
+`elsif BERGEN
+xlnx_clk_gen i_xlnx_clk_gen (
+  .clk_out1 ( clk             ), // 50 MHz
+  .clk_out2 ( phy_tx_clk      ), // 125 MHz (for RGMII PHY)
+  .clk_out3 ( eth_clk         ), // 125 MHz quadrature (90 deg phase shift)
+  .clk_out4 ( sd_clk_sys      ), // 50 MHz clock
+  .clk_out5 ( clk_200MHz_ref  ), // 200 MHz clock
+  .reset    ( cpu_reset       ),
+  .locked   ( pll_locked      ),
+  .clk_in1  ( ddr_clock_out   )  // 100MHz input clock
+);
 `else
-
 xlnx_clk_gen i_xlnx_clk_gen (
   .clk_out1 ( clk           ), // 50 MHz
   .clk_out2 ( phy_tx_clk    ), // 125 MHz (for RGMII PHY)
@@ -1236,6 +1286,78 @@ xlnx_mig_7_ddr3 i_ddr (
     .device_temp         (            ), // keep open
     .sys_rst             ( cpu_resetn )
 );
+
+`elsif BERGEN
+xlnx_mig_7_ddr3 i_ddr (
+    .sys_clk_p,
+    .sys_clk_n,
+    .ddr3_dq,
+    .ddr3_dqs_n,
+    .ddr3_dqs_p,
+    .ddr3_addr,
+    .ddr3_ba,
+    .ddr3_ras_n,
+    .ddr3_cas_n,
+    .ddr3_we_n,
+    .ddr3_reset_n,
+    .ddr3_ck_p,
+    .ddr3_ck_n,
+    .ddr3_cke,
+    .ddr3_cs_n,
+    .ddr3_dm,
+    .ddr3_odt,
+    .mmcm_locked     (                ), // keep open
+    .app_sr_req      ( '0             ),
+    .app_ref_req     ( '0             ),
+    .app_zq_req      ( '0             ),
+    .app_sr_active   (                ), // keep open
+    .app_ref_ack     (                ), // keep open
+    .app_zq_ack      (                ), // keep open
+    .ui_clk          ( ddr_clock_out  ),
+    .ui_clk_sync_rst ( ddr_sync_reset ),
+    .aresetn         ( ndmreset_n     ),
+    .s_axi_awid,
+    .s_axi_awaddr    ( s_axi_awaddr[28:0] ),
+    .s_axi_awlen,
+    .s_axi_awsize,
+    .s_axi_awburst,
+    .s_axi_awlock,
+    .s_axi_awcache,
+    .s_axi_awprot,
+    .s_axi_awqos,
+    .s_axi_awvalid,
+    .s_axi_awready,
+    .s_axi_wdata,
+    .s_axi_wstrb,
+    .s_axi_wlast,
+    .s_axi_wvalid,
+    .s_axi_wready,
+    .s_axi_bready,
+    .s_axi_bid,
+    .s_axi_bresp,
+    .s_axi_bvalid,
+    .s_axi_arid,
+    .s_axi_araddr     ( s_axi_araddr[28:0] ),
+    .s_axi_arlen,
+    .s_axi_arsize,
+    .s_axi_arburst,
+    .s_axi_arlock,
+    .s_axi_arcache,
+    .s_axi_arprot,
+    .s_axi_arqos,
+    .s_axi_arvalid,
+    .s_axi_arready,
+    .s_axi_rready,
+    .s_axi_rid,
+    .s_axi_rdata,
+    .s_axi_rresp,
+    .s_axi_rlast,
+    .s_axi_rvalid,
+    .init_calib_complete (            ), // keep open
+    .device_temp         (            ), // keep open
+    .sys_rst             ( cpu_resetn )
+);
+
 `elsif VC707
 fan_ctrl i_fan_ctrl (
     .clk_i         ( clk        ),

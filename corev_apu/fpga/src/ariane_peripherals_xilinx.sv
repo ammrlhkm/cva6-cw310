@@ -57,6 +57,9 @@ module ariane_peripherals #(
     output logic       spi_ss          ,
     // SD Card
     input  logic       sd_clk_i        ,
+    `ifdef BERGEN
+    output logic       trigger         ,
+    `endif
     output logic [7:0] leds_o          ,
     input  logic [7:0] dip_switches_i
 );
@@ -729,7 +732,11 @@ module ariane_peripherals #(
             .s_axi_rvalid  ( s_axi_gpio_rvalid      ),
             .s_axi_rready  ( s_axi_gpio_rready      ),
             .gpio_io_i     ( '0                     ),
+            `ifdef BERGEN
+            .gpio_io_o     ( {trigger,leds_o}       ),
+            `else
             .gpio_io_o     ( leds_o                 ),
+            `endif
             .gpio_io_t     (                        ),
             .gpio2_io_i    ( dip_switches_i         )
         );
