@@ -17,6 +17,10 @@ UART_BITRATE ?= 115200
 HAS_ETHERNET ?= 1
 endif
 
+ifeq ($(BOARD), bergen)
+HAS_ETHERNET = 0
+endif
+
 CC = $(RISCV)/bin/${CROSSCOMPILE}gcc
 OBJCOPY = $(RISCV)/bin/$(CROSSCOMPILE)objcopy
 SED = sed

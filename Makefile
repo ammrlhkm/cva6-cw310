@@ -74,6 +74,9 @@ ifeq ($(BOARD), genesys2)
 	XILINX_PART              := xc7k325tffg900-2
 	XILINX_BOARD             := digilentinc.com:genesys2:part0:1.1
 	CLK_PERIOD_NS            := 20
+else ifeq ($(BOARD), bergen)
+	XILINX_PART              := xc7k410tfbg676-2
+	CLK_PERIOD_NS            := 20
 else ifeq ($(BOARD), kc705)
 	XILINX_PART              := xc7k325tffg900-2
 	XILINX_BOARD             := xilinx.com:kc705:part0:1.5
